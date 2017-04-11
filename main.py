@@ -23,6 +23,11 @@ from google.appengine.ext import db
 template_dir = os.path.join(os.path.dirname(__file__), 'templates')
 jinja_env = jinja2.Environment(loader = jinja2.FileSystemLoader(template_dir), autoescape=True)
 
+class Post(db.Model):
+    title = db.StringProperty(required = True)
+    body = db.TextProperty(required = True)
+    created = db.DateTimeProperty(auto_now_add = True)
+
 
 class Handler(webapp2.RequestHandler):
     def write (self, *a, **kw):
@@ -35,14 +40,12 @@ class Handler(webapp2.RequestHandler):
     def render(self, template,**kw):
         self.write(self.render_str(template, **kw))
 
-    def render_blog(self, title="", body="", error=""):
-        posts = db.GqlQuery("SELECT * FROM Post ORDER BY created DESC LIMIT 5")
-        self.render("blog.html", title=title, body=body, error=error, posts=posts)
+    def render_front(self, title="", body="", error=""):
+        self.render("form.html", title=title, body=body, error=error)
 
-class Post(db.Model):
-    title = db.StringProperty(required = True)
-    body = db.TextProperty(required = True)
-    created = db.DateTimeProperty(auto_now_add = True)
+    def render_blog(self):
+        posts = db.GqlQuery("SELECT * FROM Post ORDER BY created DESC LIMIT 5")
+        self.render("blog.html", posts=posts)
 
 
 class MainHandler(Handler):
@@ -56,17 +59,26 @@ class MainHandler(Handler):
         if title and body:
             a = Post(title = title, body = body)
             a.put()
-            self.redirect("/blog")
+            self.redirect("/blog/{0}".format(a.key().id()))
         else:
             error = "We need both a title and a body for your post!"
             self.render_front(title, body, error)
+
 
 class BlogHandler(Handler):
     def get(self):
         self.render_blog()
 
 
+class ViewPostHandler(Handler):
+    def get(self, id):
+        id = int(id)
+        post = Post.get_by_id(id)
+        self.render("post.html",post=post)
+
+
 app = webapp2.WSGIApplication([
     ('/', MainHandler),
-    ('/blog', BlogHandler)
+    ('/blog', BlogHandler),
+    webapp2.Route('/blog/<id:\d+>', ViewPostHandler)
 ], debug=True)
